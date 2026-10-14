@@ -2,6 +2,7 @@
 import express from "express";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
+import { registerRoomHandlers } from "./rooms.js";
 
 // Create the Express application
 const app = express();
@@ -29,6 +30,7 @@ app.get("/health", (_req, res) => {
 // Handle players connecting to the server
 io.on("connection", (socket) => {
   console.log("Player connected:", socket.id);
+  registerRoomHandlers(io, socket);
 
   // Temporary test: broadcast messages to everyone
   socket.on("chat:send", (message: unknown) => {
