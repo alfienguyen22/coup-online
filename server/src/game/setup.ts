@@ -68,10 +68,11 @@ export function createGame(
 
   // Return the initial game state.
   return {
-    players,
-    deck,
-    currentPlayerIndex: 0,
-    phase: "turn_start",
-    winnerId: null,
-  };
+  players,
+  deck,
+  currentPlayerIndex: 0,
+  phase: "turn_start",
+  pendingAction: null,
+  winnerId: null,
+};
 }
