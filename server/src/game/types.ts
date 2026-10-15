@@ -22,14 +22,13 @@ export interface PlayerState {
   revealed: Role[];
 }
 
-// We will add more phases as we implement other actions.
 export type GamePhase =
   | "turn_start"
   | "foreign_aid_response"
   | "foreign_aid_block_challenge"
+  | "coup_influence_loss"
   | "game_over";
 
-// Tracks a Foreign Aid action that has not resolved yet.
 export interface PendingForeignAid {
   type: "foreign_aid";
   actorId: string;
@@ -37,7 +36,15 @@ export interface PendingForeignAid {
   blockerId: string | null;
 }
 
-export type PendingAction = PendingForeignAid;
+export interface PendingCoup {
+  type: "coup";
+  actorId: string;
+  targetId: string;
+}
+
+export type PendingAction =
+  | PendingForeignAid
+  | PendingCoup;
 
 export interface GameState {
   players: PlayerState[];
