@@ -273,3 +273,31 @@ export function resolveCoupInfluenceLoss(
   // Finish the turn after influence is lost.
   return finishTurn(updatedGame);
 }
+
+
+// ------------------------------------------
+// TAX (DUKE)
+// ------------------------------------------
+
+// Declare Tax by claiming Duke.
+// Other players may challenge this claim.
+export function declareTax(
+  game: GameState,
+  playerId: string
+): GameState {
+  validateTurnAction(game, playerId);
+
+  return {
+    ...game,
+    phase: "claim_response",
+    pendingAction: {
+      type: "claim",
+      action: "tax",
+      actorId: playerId,
+      claimedRole: "Duke",
+      passedPlayerIds: [],
+      challenge: null,
+    },
+  };
+}
+

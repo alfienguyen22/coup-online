@@ -27,6 +27,8 @@ export type GamePhase =
   | "foreign_aid_response"
   | "foreign_aid_block_challenge"
   | "coup_influence_loss"
+  | "claim_response"
+  | "challenge_influence_loss"
   | "game_over";
 
 export interface PendingForeignAid {
@@ -42,9 +44,30 @@ export interface PendingCoup {
   targetId: string;
 }
 
+// Records the result of challenging a character claim.
+export interface ChallengeResult {
+  challengerId: string;
+  claimantWasTruthful: boolean;
+}
+
+// A character claim waiting for player responses.
+export interface PendingClaim {
+  type: "claim";
+
+  // Only Tax is implemented for now.
+  action: "tax";
+
+  actorId: string;
+  claimedRole: Role;
+
+  passedPlayerIds: string[];
+  challenge: ChallengeResult | null;
+}
+
 export type PendingAction =
   | PendingForeignAid
-  | PendingCoup;
+  | PendingCoup
+  | PendingClaim;
 
 export interface GameState {
   players: PlayerState[];
