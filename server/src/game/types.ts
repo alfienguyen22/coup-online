@@ -22,21 +22,36 @@ export interface PlayerState {
   revealed: Role[];
 }
 
+
 export type GamePhase =
   | "turn_start"
   | "foreign_aid_response"
   | "foreign_aid_block_challenge"
+  | "foreign_aid_block_influence_loss"
   | "coup_influence_loss"
   | "claim_response"
   | "challenge_influence_loss"
   | "game_over";
 
+
+
 export interface PendingForeignAid {
   type: "foreign_aid";
   actorId: string;
+
+  // Players who passed on the original Foreign Aid action.
   passedPlayerIds: string[];
+
+  // Player claiming Duke to block the action.
   blockerId: string | null;
+
+  // Players who passed on challenging the Duke block.
+  blockPassedPlayerIds: string[];
+
+  // Result of a challenge against the block, if any.
+  blockChallenge: ChallengeResult | null;
 }
+
 
 export interface PendingCoup {
   type: "coup";

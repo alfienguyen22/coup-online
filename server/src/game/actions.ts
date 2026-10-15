@@ -84,12 +84,16 @@ export function declareForeignAid(
   return {
     ...game,
     phase: "foreign_aid_response",
+    
     pendingAction: {
-      type: "foreign_aid",
-      actorId: playerId,
-      passedPlayerIds: [],
-      blockerId: null,
+    type: "foreign_aid",
+    actorId: playerId,
+    passedPlayerIds: [],
+    blockerId: null,
+    blockPassedPlayerIds: [],
+    blockChallenge: null,
     },
+
   };
 }
 
@@ -132,16 +136,20 @@ export function respondToForeignAid(
   }
 
   // Claim Duke to block Foreign Aid.
-  if (response === "block") {
+  
+    if (response === "block") {
     return {
-      ...game,
-      phase: "foreign_aid_block_challenge",
-      pendingAction: {
+        ...game,
+        phase: "foreign_aid_block_challenge",
+        pendingAction: {
         ...action,
         blockerId: playerId,
-      },
+        blockPassedPlayerIds: [],
+        blockChallenge: null,
+        },
     };
-  }
+    }
+
 
   const passedPlayerIds = [
     ...action.passedPlayerIds,
