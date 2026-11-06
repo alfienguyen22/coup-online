@@ -31,6 +31,10 @@ export type GamePhase =
   | "coup_influence_loss"
   | "claim_response"
   | "challenge_influence_loss"
+  | "assassination_block_response"
+  | "assassination_block_challenge"
+  | "assassination_influence_loss"
+  | "assassination_block_influence_loss"
   | "game_over";
 
 
@@ -70,13 +74,18 @@ export interface PendingClaim {
   type: "claim";
 
   // Only Tax is implemented for now.
-  action: "tax";
+  action: "tax" | "assassinate";
 
   actorId: string;
+  targetId?: string;
   claimedRole: Role;
 
   passedPlayerIds: string[];
   challenge: ChallengeResult | null;
+
+  blockerId?: string;
+  blockPassedPlayerIds?: string[];
+  blockChallenge?: ChallengeResult | null;
 }
 
 export type PendingAction =

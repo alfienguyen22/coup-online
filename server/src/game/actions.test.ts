@@ -7,6 +7,7 @@ import {
   respondToForeignAid,
   takeCoup,
   resolveCoupInfluenceLoss,
+  declareAssassination,
 } from "./actions.js";
 import { finishTurn } from "./turns.js";
 
@@ -169,6 +170,108 @@ it("records a Duke block without resolving it yet", () => {
   });
 });
 
+describe("Assassination", () => {
+  it("deducts 3 coins and starts an Assassin claim", () => {
+    const game = testGame();
+
+    game.players[0].coins = 5;
+
+    const updated = declareAssassination(
+      game,
+      "1",
+      "2"
+    );
+
+    expect(updated.players[0].coins).toBe(2);
+    expect(updated.phase).toBe("claim_response");
+    expect(updated.currentPlayerIndex).toBe(0);
+
+    expect(updated.pendingAction).toEqual({
+      type: "claim",
+      action: "assassinate",
+      actorId: "1",
+      targetId: "2",
+      claimedRole: "Assassin",
+      passedPlayerIds: [],
+      challenge: null,
+    });
+  });
+
+  it("requires at least 3 coins", () => {
+    const game = testGame();
+
+    game.players[0].coins = 2;
+
+    expect(() =>
+      declareAssassination(game, "1", "2")
+    ).toThrow();
+  });
+
+  it("prevents a player from targeting themselves", () => {
+    const game = testGame();
+
+    game.players[0].coins = 3;
+
+    expect(() =>
+      declareAssassination(game, "1", "1")
+    ).toThrow();
+  });
+
+  it("prevents targeting an eliminated player", () => {
+    const game = testGame();
+
+    game.players[0].coins = 3;
+    game.players[1].hand = [];
+
+    expect(() =>
+      declareAssassination(game, "1", "2")
+    ).toThrow();
+  });
+
+  it("prevents assassination outside the player's turn", () => {
+    const game = testGame();
+
+    game.players[1].coins = 3;
+
+    expect(() =>
+      declareAssassination(game, "2", "1")
+    ).toThrow();
+  });
+
+  it("requires Coup instead when the player has 10 or more coins", () => {
+    const game = testGame();
+
+    game.players[0].coins = 10;
+
+    expect(() =>
+      declareAssassination(game, "1", "2")
+    ).toThrow();
+  });
+
+  it("prevents assassination while another action is pending", () => {
+    let game = testGame();
+
+    game.players[0].coins = 3;
+
+    game = declareForeignAid(game, "1");
+
+    expect(() =>
+      declareAssassination(game, "1", "2")
+    ).toThrow();
+  });
+
+  it("does not mutate the original game", () => {
+    const game = testGame();
+
+    game.players[0].coins = 5;
+
+    declareAssassination(game, "1", "2");
+
+    expect(game.players[0].coins).toBe(5);
+    expect(game.phase).toBe("turn_start");
+    expect(game.pendingAction).toBeNull();
+  });
+});
 
 describe("Coup action", () => {
   it("requires at least 7 coins", () => {

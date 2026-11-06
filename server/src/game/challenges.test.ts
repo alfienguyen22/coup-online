@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createGame } from "./setup.js";
 import {
   declareTax,
+  declareAssassination,
   takeIncome,
   declareForeignAid,
 } from "./actions.js";
@@ -349,5 +350,104 @@ describe("Tax and character claims", () => {
     expect(challenged.phase).toBe(
       "challenge_influence_loss"
     );
+  });
+});
+
+describe("Assassination claims", () => {
+  it("opens a Contessa block window when everyone passes", () => {
+    const game = testGame();
+
+    game.players[0].coins = 5;
+
+    let updated = declareAssassination(
+      game,
+      "1",
+      "2"
+    );
+
+    expect(updated.phase).toBe("claim_response");
+
+    updated = respondToClaim(
+      updated,
+      "2",
+      "pass"
+    );
+
+    expect(updated.phase).toBe("claim_response");
+
+    updated = respondToClaim(
+      updated,
+      "3",
+      "pass"
+    );
+
+    expect(updated.phase).toBe(
+      "assassination_block_response"
+    );
+
+    expect(updated.currentPlayerIndex).toBe(0);
+
+    expect(updated.pendingAction).toMatchObject({
+      type: "claim",
+      action: "assassinate",
+      actorId: "1",
+      targetId: "2",
+      claimedRole: "Assassin",
+    });
+
+    // The 3-coin assassination cost was already paid.
+    expect(updated.players[0].coins).toBe(2);
+  });
+
+  it("opens a Contessa block window after a truthful Assassin survives a challenge", () => {
+    const game = testGame();
+
+    game.players[0].coins = 5;
+    game.players[0].hand = [
+      "Assassin",
+      "Captain",
+    ];
+
+    game.players[1].hand = [
+      "Duke",
+      "Contessa",
+    ];
+
+    let updated = declareAssassination(
+      game,
+      "1",
+      "2"
+    );
+
+    updated = respondToClaim(
+      updated,
+      "2",
+      "challenge"
+    );
+
+    expect(updated.phase).toBe(
+      "challenge_influence_loss"
+    );
+
+    updated = resolveClaimInfluenceLoss(
+      updated,
+      "2",
+      "Duke"
+    );
+
+    expect(updated.players[1].hand).toEqual([
+      "Contessa",
+    ]);
+
+    expect(updated.phase).toBe(
+      "assassination_block_response"
+    );
+
+    expect(updated.pendingAction).toMatchObject({
+      type: "claim",
+      action: "assassinate",
+      actorId: "1",
+      targetId: "2",
+    });
   });
 });

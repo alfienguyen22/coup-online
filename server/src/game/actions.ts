@@ -191,6 +191,69 @@ export function respondToForeignAid(
 }
 
 // ------------------------------------------
+// ASSASSINATION
+// ------------------------------------------
+// Pay 3 coins and claim Assassin.
+// Other players may challenge the Assassin claim.
+export function declareAssassination(
+  game: GameState,
+  actorId: string,
+  targetId: string
+): GameState {
+  validateTurnAction(game, actorId);
+
+  const actor = getCurrentPlayer(game);
+
+  if (actor.coins < 3) {
+    throw new Error(
+      "You need at least 3 coins to assassinate."
+    );
+  }
+
+  if (actorId === targetId) {
+    throw new Error(
+      "You cannot assassinate yourself."
+    );
+  }
+
+  const target = game.players.find(
+    (player) => player.id === targetId
+  );
+
+  if (!target) {
+    throw new Error("Target player not found.");
+  }
+
+  if (target.hand.length === 0) {
+    throw new Error(
+      "You cannot assassinate an eliminated player."
+    );
+  }
+
+  const updatedPlayers = game.players.map(
+    (player) =>
+      player.id === actorId
+        ? { ...player, coins: player.coins - 3 }
+        : player
+  );
+
+  return {
+    ...game,
+    players: updatedPlayers,
+    phase: "claim_response",
+    pendingAction: {
+      type: "claim",
+      action: "assassinate",
+      actorId,
+      targetId,
+      claimedRole: "Assassin",
+      passedPlayerIds: [],
+      challenge: null,
+    },
+  };
+}
+
+// ------------------------------------------
 // COUP
 // ------------------------------------------
 

@@ -21,10 +21,26 @@ function resolveClaimEffect(
         ...game,
         players: game.players.map((player) =>
           player.id === claim.actorId
-            ? { ...player, coins: player.coins + 3 }
+            ? {
+                ...player,
+                coins: player.coins + 3,
+              }
             : player
         ),
       });
+
+    case "assassinate":
+      return {
+        ...game,
+        phase: "assassination_block_response",
+        pendingAction: {
+          ...claim,
+
+          // The Assassin challenge stage is finished.
+          passedPlayerIds: [],
+          challenge: null,
+        },
+      };
   }
 }
 
