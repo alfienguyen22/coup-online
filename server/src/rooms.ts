@@ -4,10 +4,20 @@ import type { Server, Socket } from "socket.io";
 import { createGame } from "./game/setup.js";
 import { serializeGameForPlayer } from "./game/view.js";
 
-import type {
-  GameState,
-  LobbyPlayer,
+import {
+  takeIncome,
+  takeCoup,
+  resolveCoupInfluenceLoss,
+} from "./game/actions.js";
+
+import {
+  ROLES,
+  type GameState,
+  type LobbyPlayer,
+  type Role,
 } from "./game/types.js";
+
+
 
 
 interface Room {
@@ -39,6 +49,15 @@ const CHARACTERS =
 // ------------------------------------------
 // ROOM HELPERS
 // ------------------------------------------
+function isRole(
+    value: unknown
+  ): value is Role {
+    return (
+      typeof value === "string" &&
+      ROLES.includes(value as Role)
+    );
+  }
+
 
 function generateRoomCode(): string {
   let code: string;
@@ -334,6 +353,7 @@ export function registerRoomHandlers(
     }
   );
 
+  
 
   // ----------------------------------------
   // START GAME
@@ -445,6 +465,255 @@ export function registerRoomHandlers(
     }
   );
 
+
+  // ----------------------------------------
+  // TAKE INCOME
+  // ----------------------------------------
+
+  socket.on(
+    "game:income",
+    (callback) => {
+      if (
+        typeof callback !== "function"
+      ) {
+        return;
+      }
+
+      const code =
+        socket.data.roomCode;
+
+      if (
+        typeof code !== "string"
+      ) {
+        callback({
+          success: false,
+          error:
+            "You are not in a room.",
+        });
+
+        return;
+      }
+
+      const room =
+        rooms.get(code);
+
+      if (!room) {
+        callback({
+          success: false,
+          error:
+            "Room not found.",
+        });
+
+        return;
+      }
+
+      if (!room.game) {
+        callback({
+          success: false,
+          error:
+            "The game has not started.",
+        });
+
+        return;
+      }
+
+      try {
+        room.game = takeIncome(
+          room.game,
+          socket.id
+        );
+      } catch (error) {
+        callback({
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unable to take Income.",
+        });
+
+        return;
+      }
+
+      callback({
+        success: true,
+      });
+
+      broadcastGameState(
+        io,
+        room
+      );
+    }
+  );
+
+  // ----------------------------------------
+  // COUP
+  // ----------------------------------------
+
+  socket.on(
+    "game:coup",
+    (
+      targetId: unknown,
+      callback
+    ) => {
+      if (
+        typeof callback !== "function"
+      ) {
+        return;
+      }
+
+      const code =
+        socket.data.roomCode;
+
+      if (
+        typeof code !== "string"
+      ) {
+        callback({
+          success: false,
+          error:
+            "You are not in a room.",
+        });
+
+        return;
+      }
+
+      const room =
+        rooms.get(code);
+
+      if (!room?.game) {
+        callback({
+          success: false,
+          error:
+            "No active game found.",
+        });
+
+        return;
+      }
+
+      if (
+        typeof targetId !== "string"
+      ) {
+        callback({
+          success: false,
+          error:
+            "Invalid Coup target.",
+        });
+
+        return;
+      }
+
+      try {
+        room.game = takeCoup(
+          room.game,
+          socket.id,
+          targetId
+        );
+      } catch (error) {
+        callback({
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unable to Coup.",
+        });
+
+        return;
+      }
+
+      callback({
+        success: true,
+      });
+
+      broadcastGameState(
+        io,
+        room
+      );
+    }
+  );
+
+
+  // ----------------------------------------
+  // RESOLVE COUP INFLUENCE LOSS
+  // ----------------------------------------
+
+  socket.on(
+    "game:coup:lose-influence",
+    (
+      card: unknown,
+      callback
+    ) => {
+      if (
+        typeof callback !== "function"
+      ) {
+        return;
+      }
+
+      const code =
+        socket.data.roomCode;
+
+      if (
+        typeof code !== "string"
+      ) {
+        callback({
+          success: false,
+          error:
+            "You are not in a room.",
+        });
+
+        return;
+      }
+
+      const room =
+        rooms.get(code);
+
+      if (!room?.game) {
+        callback({
+          success: false,
+          error:
+            "No active game found.",
+        });
+
+        return;
+      }
+
+      if (!isRole(card)) {
+        callback({
+          success: false,
+          error:
+            "Invalid influence card.",
+        });
+
+        return;
+      }
+
+      try {
+        room.game =
+          resolveCoupInfluenceLoss(
+            room.game,
+            socket.id,
+            card
+          );
+      } catch (error) {
+        callback({
+          success: false,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Unable to lose influence.",
+        });
+
+        return;
+      }
+
+      callback({
+        success: true,
+      });
+
+      broadcastGameState(
+        io,
+        room
+      );
+    }
+  );
 
   // ----------------------------------------
   // DISCONNECT
