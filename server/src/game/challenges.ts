@@ -299,6 +299,21 @@ export function resolveClaimInfluenceLoss(
     card
   );
 
+  // The challenge itself may have eliminated
+  // the final opponent.
+  //
+  // If only one (or zero) living players remain,
+  // finishTurn handles game-over detection.
+  // We must do this BEFORE continuing the
+  // original character action.
+  const livingPlayers = afterLoss.players.filter(
+    (player) => player.hand.length > 0
+  );
+
+  if (livingPlayers.length <= 1) {
+    return finishTurn(afterLoss);
+  }
+
   // Truthful claim:
   // The challenger loses influence,
   // and the original action succeeds.
