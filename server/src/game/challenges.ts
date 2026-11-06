@@ -41,6 +41,19 @@ function resolveClaimEffect(
           challenge: null,
         },
       };
+
+    case "steal":
+      return {
+        ...game,
+        phase: "steal_block_response",
+        pendingAction: {
+          ...claim,
+
+          // The Captain challenge stage is finished.
+          passedPlayerIds: [],
+          challenge: null,
+        },
+      };
   }
 }
 

@@ -8,8 +8,11 @@ import {
   takeCoup,
   resolveCoupInfluenceLoss,
   declareAssassination,
+  declareSteal,
 } from "./actions.js";
 import { finishTurn } from "./turns.js";
+
+
 
 function testGame() {
   return createGame([
@@ -507,5 +510,128 @@ describe("Coup action", () => {
       originalHand
     );
     expect(game.players[1].revealed).toEqual([]);
+  });
+});
+
+describe("Steal", () => {
+  it("starts a Captain claim against another player", () => {
+    const game = testGame();
+
+    game.players[0].coins = 2;
+    game.players[1].coins = 4;
+
+    const updated = declareSteal(
+      game,
+      "1",
+      "2"
+    );
+
+    expect(updated.phase).toBe("claim_response");
+
+    expect(updated.pendingAction).toEqual({
+      type: "claim",
+      action: "steal",
+      actorId: "1",
+      targetId: "2",
+      claimedRole: "Captain",
+      passedPlayerIds: [],
+      challenge: null,
+    });
+
+    // No coins move until the Captain claim
+    // and any block have been resolved.
+    expect(updated.players[0].coins).toBe(2);
+    expect(updated.players[1].coins).toBe(4);
+  });
+
+  it("prevents stealing from yourself", () => {
+    const game = testGame();
+
+    expect(() =>
+      declareSteal(game, "1", "1")
+    ).toThrow();
+  });
+
+  it("prevents stealing from an eliminated player", () => {
+    const game = testGame();
+
+    game.players[1].hand = [];
+
+    expect(() =>
+      declareSteal(game, "1", "2")
+    ).toThrow();
+  });
+
+  it("allows targeting a player with only one coin", () => {
+    const game = testGame();
+
+    game.players[1].coins = 1;
+
+    const updated = declareSteal(
+      game,
+      "1",
+      "2"
+    );
+
+    expect(updated.phase).toBe("claim_response");
+    expect(updated.players[1].coins).toBe(1);
+  });
+
+  it("allows targeting a player with zero coins", () => {
+    const game = testGame();
+
+    game.players[1].coins = 0;
+
+    const updated = declareSteal(
+      game,
+      "1",
+      "2"
+    );
+
+    expect(updated.phase).toBe("claim_response");
+    expect(updated.players[1].coins).toBe(0);
+  });
+
+  it("prevents stealing outside the player's turn", () => {
+    const game = testGame();
+
+    expect(() =>
+      declareSteal(game, "2", "1")
+    ).toThrow();
+  });
+
+  it("requires Coup instead at 10 or more coins", () => {
+    const game = testGame();
+
+    game.players[0].coins = 10;
+
+    expect(() =>
+      declareSteal(game, "1", "2")
+    ).toThrow();
+  });
+
+  it("prevents stealing while another action is pending", () => {
+    let game = testGame();
+
+    game = declareForeignAid(game, "1");
+
+    expect(() =>
+      declareSteal(game, "1", "2")
+    ).toThrow();
+  });
+
+  it("does not mutate the original game", () => {
+    const game = testGame();
+
+    game.players[0].coins = 2;
+    game.players[1].coins = 4;
+
+    declareSteal(game, "1", "2");
+
+    expect(game.phase).toBe("turn_start");
+    expect(game.pendingAction).toBeNull();
+
+    expect(game.players[0].coins).toBe(2);
+    expect(game.players[1].coins).toBe(4);
   });
 });

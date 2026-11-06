@@ -31,6 +31,9 @@ export type GamePhase =
   | "coup_influence_loss"
   | "claim_response"
   | "challenge_influence_loss"
+  | "steal_block_response"
+  | "steal_block_challenge"
+  | "steal_block_influence_loss"
   | "assassination_block_response"
   | "assassination_block_challenge"
   | "assassination_influence_loss"
@@ -73,8 +76,8 @@ export interface ChallengeResult {
 export interface PendingClaim {
   type: "claim";
 
-  // Only Tax is implemented for now.
-  action: "tax" | "assassinate";
+  // Tax, assassinate and stealing is implemented now.
+  action: "tax" | "assassinate" | "steal";
 
   actorId: string;
   targetId?: string;
@@ -84,6 +87,7 @@ export interface PendingClaim {
   challenge: ChallengeResult | null;
 
   blockerId?: string;
+  blockClaimedRole?: Role;
   blockPassedPlayerIds?: string[];
   blockChallenge?: ChallengeResult | null;
 }

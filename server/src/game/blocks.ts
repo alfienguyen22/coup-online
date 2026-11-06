@@ -654,3 +654,394 @@ export function resolveAssassinationBlockInfluenceLoss(
     pendingAction: action,
   };
 }
+
+// ------------------------------------------
+// COMPLETE A SUCCESSFUL STEAL
+// ------------------------------------------
+
+function completeSteal(
+  game: GameState,
+  actorId: string,
+  targetId: string
+): GameState {
+  const target = game.players.find(
+    (player) => player.id === targetId
+  );
+
+  if (!target) {
+    throw new Error(
+      "Steal target is missing."
+    );
+  }
+
+  const amountToSteal = Math.min(
+    2,
+    target.coins
+  );
+
+  const updatedPlayers = game.players.map(
+    (player) => {
+      if (player.id === actorId) {
+        return {
+          ...player,
+          coins:
+            player.coins + amountToSteal,
+        };
+      }
+
+      if (player.id === targetId) {
+        return {
+          ...player,
+          coins:
+            player.coins - amountToSteal,
+        };
+      }
+
+      return player;
+    }
+  );
+
+  return finishTurn({
+    ...game,
+    players: updatedPlayers,
+  });
+}
+
+// ------------------------------------------
+// RESPOND TO A STEAL BLOCK
+// ------------------------------------------
+
+export function respondToStealBlock(
+  game: GameState,
+  playerId: string,
+  response: "pass" | "captain" | "ambassador"
+): GameState {
+  if (
+    game.phase !== "steal_block_response" ||
+    game.pendingAction?.type !== "claim" ||
+    game.pendingAction.action !== "steal"
+  ) {
+    throw new Error(
+      "No Steal block response is pending."
+    );
+  }
+
+  const action = game.pendingAction;
+  const targetId = action.targetId;
+
+  if (!targetId) {
+    throw new Error(
+      "Steal target is missing."
+    );
+  }
+
+  if (playerId !== targetId) {
+    throw new Error(
+      "Only the steal target can respond."
+    );
+  }
+
+  const target = game.players.find(
+    (player) => player.id === targetId
+  );
+
+  if (!target || target.hand.length === 0) {
+    throw new Error(
+      "The steal target is not an active player."
+    );
+  }
+
+  // ----------------------------------------
+  // PASS
+  // ----------------------------------------
+
+  if (response === "pass") {
+    return completeSteal(
+      game,
+      action.actorId,
+      targetId
+    );
+  }
+
+  // ----------------------------------------
+  // BLOCK
+  // ----------------------------------------
+
+  const blockClaimedRole: Role =
+    response === "captain"
+      ? "Captain"
+      : "Ambassador";
+
+  return {
+    ...game,
+
+    phase: "steal_block_challenge",
+
+    pendingAction: {
+      ...action,
+
+      blockerId: targetId,
+      blockClaimedRole,
+      blockPassedPlayerIds: [],
+      blockChallenge: null,
+    },
+  };
+}
+
+
+// ------------------------------------------
+// RESPOND TO A STEAL BLOCK CHALLENGE
+// ------------------------------------------
+
+export function respondToStealBlockChallenge(
+  game: GameState,
+  playerId: string,
+  response: "pass" | "challenge"
+): GameState {
+  if (
+    game.phase !== "steal_block_challenge" ||
+    game.pendingAction?.type !== "claim" ||
+    game.pendingAction.action !== "steal"
+  ) {
+    throw new Error(
+      "No Steal block is awaiting responses."
+    );
+  }
+
+  const action = game.pendingAction;
+
+  const blockerId = action.blockerId;
+  const blockClaimedRole =
+    action.blockClaimedRole;
+
+  if (!blockerId || !blockClaimedRole) {
+    throw new Error(
+      "Steal block information is missing."
+    );
+  }
+
+  const responder = game.players.find(
+    (player) => player.id === playerId
+  );
+
+  if (!responder || responder.hand.length === 0) {
+    throw new Error(
+      "Only living players can respond."
+    );
+  }
+
+  if (playerId === blockerId) {
+    throw new Error(
+      "You cannot respond to your own block."
+    );
+  }
+
+  const passedPlayerIds =
+    action.blockPassedPlayerIds ?? [];
+
+  if (passedPlayerIds.includes(playerId)) {
+    throw new Error(
+      "You have already passed on this block."
+    );
+  }
+
+  // ----------------------------------------
+  // PASS
+  // ----------------------------------------
+
+  if (response === "pass") {
+    const blockPassedPlayerIds = [
+      ...passedPlayerIds,
+      playerId,
+    ];
+
+    const eligibleResponders =
+      game.players.filter(
+        (player) =>
+          player.hand.length > 0 &&
+          player.id !== blockerId
+      );
+
+    // Everyone accepts the block.
+    // The Steal is cancelled.
+    if (
+      blockPassedPlayerIds.length ===
+      eligibleResponders.length
+    ) {
+      return finishTurn(game);
+    }
+
+    return {
+      ...game,
+
+      pendingAction: {
+        ...action,
+        blockPassedPlayerIds,
+      },
+    };
+  }
+
+  // ----------------------------------------
+  // CHALLENGE THE BLOCK
+  // ----------------------------------------
+
+  const blocker = game.players.find(
+    (player) => player.id === blockerId
+  );
+
+  if (!blocker || blocker.hand.length === 0) {
+    throw new Error(
+      "The blocker is not an active player."
+    );
+  }
+
+  const roleIndex = blocker.hand.indexOf(
+    blockClaimedRole
+  );
+
+  const claimantWasTruthful =
+    roleIndex !== -1;
+
+  let nextDeck = game.deck;
+  let nextPlayers = game.players;
+
+  // ----------------------------------------
+  // TRUTHFUL BLOCK
+  // ----------------------------------------
+
+  if (claimantWasTruthful) {
+    nextDeck = shuffleDeck([
+      ...game.deck,
+      blockClaimedRole,
+    ]);
+
+    const replacement = nextDeck.pop();
+
+    if (!replacement) {
+      throw new Error(
+        "Cannot draw a replacement card."
+      );
+    }
+
+    nextPlayers = game.players.map(
+      (player) => {
+        if (player.id !== blockerId) {
+          return player;
+        }
+
+        const hand = [...player.hand];
+
+        hand.splice(
+          roleIndex,
+          1,
+          replacement
+        );
+
+        return {
+          ...player,
+          hand,
+        };
+      }
+    );
+  }
+
+  return {
+    ...game,
+
+    deck: nextDeck,
+    players: nextPlayers,
+
+    phase: "steal_block_influence_loss",
+
+    pendingAction: {
+      ...action,
+
+      blockChallenge: {
+        challengerId: playerId,
+        claimantWasTruthful,
+      },
+    },
+  };
+}
+
+// ------------------------------------------
+// RESOLVE STEAL BLOCK CHALLENGE
+// ------------------------------------------
+
+export function resolveStealBlockInfluenceLoss(
+  game: GameState,
+  playerId: string,
+  card: Role
+): GameState {
+  if (
+    game.phase !==
+      "steal_block_influence_loss" ||
+    game.pendingAction?.type !== "claim" ||
+    game.pendingAction.action !== "steal"
+  ) {
+    throw new Error(
+      "No Steal block challenge influence loss is pending."
+    );
+  }
+
+  const action = game.pendingAction;
+
+  const blockerId = action.blockerId;
+  const challenge = action.blockChallenge;
+
+  if (!blockerId || !challenge) {
+    throw new Error(
+      "Steal block challenge information is missing."
+    );
+  }
+
+  const loserId =
+    challenge.claimantWasTruthful
+      ? challenge.challengerId
+      : blockerId;
+
+  if (playerId !== loserId) {
+    throw new Error(
+      "Only the losing player can reveal influence."
+    );
+  }
+
+  const afterLoss = loseInfluence(
+    game,
+    playerId,
+    card
+  );
+
+  // If this influence loss ended the game,
+  // nothing else needs to resolve.
+  if (afterLoss.phase === "game_over") {
+    return afterLoss;
+  }
+
+  // ----------------------------------------
+  // TRUTHFUL BLOCK
+  // ----------------------------------------
+
+  if (challenge.claimantWasTruthful) {
+    // Captain/Ambassador successfully blocks.
+    return finishTurn(afterLoss);
+  }
+
+  // ----------------------------------------
+  // FALSE BLOCK
+  // ----------------------------------------
+
+  // The block was a bluff.
+  // Therefore the original Steal succeeds.
+  if (!action.targetId) {
+    throw new Error(
+      "Steal target is missing."
+    );
+  }
+
+  return completeSteal(
+    afterLoss,
+    action.actorId,
+    action.targetId
+  );
+}

@@ -7,6 +7,7 @@ import {
   respondToForeignAid,
   takeIncome,
   declareAssassination,
+  declareSteal
 } from "./actions.js";
 
 import { respondToClaim } from "./challenges.js";
@@ -18,6 +19,9 @@ import {
   resolveAssassinationInfluenceLoss,
   respondToAssassinationBlockChallenge,
   resolveAssassinationBlockInfluenceLoss,
+  respondToStealBlock,
+  respondToStealBlockChallenge,
+  resolveStealBlockInfluenceLoss,
 } from "./blocks.js";
 
 import type { GameState } from "./types.js";
@@ -56,6 +60,25 @@ function assassinationBlockGame(
   );
 
   // Diana and Alex both accept the Assassin claim.
+  game = respondToClaim(game, "2", "pass");
+  game = respondToClaim(game, "3", "pass");
+
+  return game;
+}
+
+function stealBlockGame(
+  initialGame: GameState = testGame()
+): GameState {
+  initialGame.players[0].coins = 2;
+  initialGame.players[1].coins = 4;
+
+  let game = declareSteal(
+    initialGame,
+    "1",
+    "2"
+  );
+
+  // Diana and Alex both accept Alfie's Captain claim.
   game = respondToClaim(game, "2", "pass");
   game = respondToClaim(game, "3", "pass");
 
@@ -1067,6 +1090,458 @@ it("handles a truthful Contessa challenge that eliminates the challenger", () =>
 
   // Diana is still the next living player.
   expect(game.currentPlayerIndex).toBe(1);
+});
+
+describe("Steal blocking", () => {
+  it("transfers 2 coins when the target passes", () => {
+    const game = stealBlockGame();
+
+    const updated = respondToStealBlock(
+      game,
+      "2",
+      "pass"
+    );
+
+    expect(updated.players[0].coins).toBe(4);
+    expect(updated.players[1].coins).toBe(2);
+
+    expect(updated.phase).toBe("turn_start");
+    expect(updated.currentPlayerIndex).toBe(1);
+    expect(updated.pendingAction).toBeNull();
+  });
+
+  it("only steals 1 coin when the target has 1 coin", () => {
+    const initial = testGame();
+
+    initial.players[0].coins = 2;
+    initial.players[1].coins = 1;
+
+    let game = declareSteal(
+      initial,
+      "1",
+      "2"
+    );
+
+    game = respondToClaim(
+      game,
+      "2",
+      "pass"
+    );
+
+    game = respondToClaim(
+      game,
+      "3",
+      "pass"
+    );
+
+    game = respondToStealBlock(
+      game,
+      "2",
+      "pass"
+    );
+
+    expect(game.players[0].coins).toBe(3);
+    expect(game.players[1].coins).toBe(0);
+  });
+
+  it("steals nothing when the target has 0 coins", () => {
+    const initial = testGame();
+
+    initial.players[0].coins = 2;
+    initial.players[1].coins = 0;
+
+    let game = declareSteal(
+      initial,
+      "1",
+      "2"
+    );
+
+    game = respondToClaim(
+      game,
+      "2",
+      "pass"
+    );
+
+    game = respondToClaim(
+      game,
+      "3",
+      "pass"
+    );
+
+    game = respondToStealBlock(
+      game,
+      "2",
+      "pass"
+    );
+
+    expect(game.players[0].coins).toBe(2);
+    expect(game.players[1].coins).toBe(0);
+  });
+
+  it("opens a challenge window when the target blocks with Captain", () => {
+    const game = stealBlockGame();
+
+    const updated = respondToStealBlock(
+      game,
+      "2",
+      "captain"
+    );
+
+    expect(updated.phase).toBe(
+      "steal_block_challenge"
+    );
+
+    expect(updated.pendingAction).toMatchObject({
+      action: "steal",
+      actorId: "1",
+      targetId: "2",
+      blockerId: "2",
+      blockClaimedRole: "Captain",
+      blockPassedPlayerIds: [],
+      blockChallenge: null,
+    });
+
+    // No coins move yet.
+    expect(updated.players[0].coins).toBe(2);
+    expect(updated.players[1].coins).toBe(4);
+  });
+
+  it("opens a challenge window when the target blocks with Ambassador", () => {
+    const game = stealBlockGame();
+
+    const updated = respondToStealBlock(
+      game,
+      "2",
+      "ambassador"
+    );
+
+    expect(updated.phase).toBe(
+      "steal_block_challenge"
+    );
+
+    expect(updated.pendingAction).toMatchObject({
+      blockerId: "2",
+      blockClaimedRole: "Ambassador",
+    });
+
+    expect(updated.players[0].coins).toBe(2);
+    expect(updated.players[1].coins).toBe(4);
+  });
+
+  it("only allows the steal target to respond", () => {
+    const game = stealBlockGame();
+
+    expect(() =>
+      respondToStealBlock(
+        game,
+        "1",
+        "pass"
+      )
+    ).toThrow();
+
+    expect(() =>
+      respondToStealBlock(
+        game,
+        "3",
+        "captain"
+      )
+    ).toThrow();
+  });
+
+  it("does not mutate the original game", () => {
+    const game = stealBlockGame();
+
+    const updated = respondToStealBlock(
+      game,
+      "2",
+      "pass"
+    );
+
+    expect(game.phase).toBe(
+      "steal_block_response"
+    );
+
+    expect(game.players[0].coins).toBe(2);
+    expect(game.players[1].coins).toBe(4);
+
+    expect(updated.players[0].coins).toBe(4);
+    expect(updated.players[1].coins).toBe(2);
+  });
+it("accepts the Steal block when everyone passes", () => {
+  let game = stealBlockGame();
+
+  game = respondToStealBlock(
+    game,
+    "2",
+    "captain"
+  );
+
+  game = respondToStealBlockChallenge(
+    game,
+    "1",
+    "pass"
+  );
+
+  expect(game.phase).toBe(
+    "steal_block_challenge"
+  );
+
+  game = respondToStealBlockChallenge(
+    game,
+    "3",
+    "pass"
+  );
+
+  // Everyone accepts Diana's Captain block.
+  expect(game.phase).toBe("turn_start");
+  expect(game.currentPlayerIndex).toBe(1);
+  expect(game.pendingAction).toBeNull();
+
+  // No coins move.
+  expect(game.players[0].coins).toBe(2);
+  expect(game.players[1].coins).toBe(4);
+});
+
+
+it("resolves a truthful Captain block", () => {
+  const initial = testGame();
+
+  initial.players[1].hand = [
+    "Captain",
+    "Duke",
+  ];
+
+  let game = stealBlockGame(initial);
+
+  game = respondToStealBlock(
+    game,
+    "2",
+    "captain"
+  );
+
+  const originalDeckSize = game.deck.length;
+
+  // Alex challenges Diana's Captain.
+  game = respondToStealBlockChallenge(
+    game,
+    "3",
+    "challenge"
+  );
+
+  expect(game.phase).toBe(
+    "steal_block_influence_loss"
+  );
+
+  expect(game.pendingAction).toMatchObject({
+    blockerId: "2",
+    blockClaimedRole: "Captain",
+
+    blockChallenge: {
+      challengerId: "3",
+      claimantWasTruthful: true,
+    },
+  });
+
+  // Diana proves Captain and receives
+  // a replacement card.
+  expect(game.players[1].hand).toHaveLength(2);
+  expect(game.players[1].hand).toContain("Duke");
+
+  expect(game.deck).toHaveLength(
+    originalDeckSize
+  );
+
+  // Alex loses the challenge.
+  const cardToLose =
+    game.players[2].hand[0];
+
+  game = resolveStealBlockInfluenceLoss(
+    game,
+    "3",
+    cardToLose
+  );
+
+  expect(game.players[2].hand).toHaveLength(1);
+
+  expect(game.players[2].revealed).toContain(
+    cardToLose
+  );
+
+  // Steal was successfully blocked.
+  expect(game.players[0].coins).toBe(2);
+  expect(game.players[1].coins).toBe(4);
+
+  expect(game.phase).toBe("turn_start");
+  expect(game.currentPlayerIndex).toBe(1);
+  expect(game.pendingAction).toBeNull();
+});
+
+
+it("resolves a truthful Ambassador block", () => {
+  const initial = testGame();
+
+  initial.players[1].hand = [
+    "Ambassador",
+    "Duke",
+  ];
+
+  let game = stealBlockGame(initial);
+
+  game = respondToStealBlock(
+    game,
+    "2",
+    "ambassador"
+  );
+
+  game = respondToStealBlockChallenge(
+    game,
+    "1",
+    "challenge"
+  );
+
+  expect(game.pendingAction).toMatchObject({
+    blockerId: "2",
+    blockClaimedRole: "Ambassador",
+
+    blockChallenge: {
+      challengerId: "1",
+      claimantWasTruthful: true,
+    },
+  });
+
+  const cardToLose =
+    game.players[0].hand[0];
+
+  game = resolveStealBlockInfluenceLoss(
+    game,
+    "1",
+    cardToLose
+  );
+
+  // Ambassador successfully blocks.
+  expect(game.players[0].coins).toBe(2);
+  expect(game.players[1].coins).toBe(4);
+
+  expect(game.phase).toBe("turn_start");
+});
+
+
+it("allows the Steal after a false block", () => {
+  const initial = testGame();
+
+  // Diana has neither Captain nor Ambassador.
+  initial.players[1].hand = [
+    "Duke",
+    "Contessa",
+  ];
+
+  let game = stealBlockGame(initial);
+
+  game = respondToStealBlock(
+    game,
+    "2",
+    "captain"
+  );
+
+  // Alex challenges the fake Captain.
+  game = respondToStealBlockChallenge(
+    game,
+    "3",
+    "challenge"
+  );
+
+  expect(game.pendingAction).toMatchObject({
+    blockerId: "2",
+    blockClaimedRole: "Captain",
+
+    blockChallenge: {
+      challengerId: "3",
+      claimantWasTruthful: false,
+    },
+  });
+
+  // Diana loses influence for bluffing.
+  game = resolveStealBlockInfluenceLoss(
+    game,
+    "2",
+    "Duke"
+  );
+
+  expect(game.players[1].hand).toEqual([
+    "Contessa",
+  ]);
+
+  expect(game.players[1].revealed).toContain(
+    "Duke"
+  );
+
+  // Her block failed, so Alfie's Steal succeeds.
+  expect(game.players[0].coins).toBe(4);
+  expect(game.players[1].coins).toBe(2);
+
+  expect(game.phase).toBe("turn_start");
+  expect(game.currentPlayerIndex).toBe(1);
+});
+
+
+it("prevents the blocker from responding to their own block", () => {
+  let game = stealBlockGame();
+
+  game = respondToStealBlock(
+    game,
+    "2",
+    "captain"
+  );
+
+  expect(() =>
+    respondToStealBlockChallenge(
+      game,
+      "2",
+      "pass"
+    )
+  ).toThrow();
+
+  expect(() =>
+    respondToStealBlockChallenge(
+      game,
+      "2",
+      "challenge"
+    )
+  ).toThrow();
+});
+
+
+it("prevents responding twice to a Steal block", () => {
+  let game = stealBlockGame();
+
+  game = respondToStealBlock(
+    game,
+    "2",
+    "ambassador"
+  );
+
+  game = respondToStealBlockChallenge(
+    game,
+    "1",
+    "pass"
+  );
+
+  expect(() =>
+    respondToStealBlockChallenge(
+      game,
+      "1",
+      "pass"
+    )
+  ).toThrow();
+
+  expect(() =>
+    respondToStealBlockChallenge(
+      game,
+      "1",
+      "challenge"
+    )
+  ).toThrow();
+});
 });
 
 });

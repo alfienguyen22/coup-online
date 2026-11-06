@@ -191,6 +191,57 @@ export function respondToForeignAid(
 }
 
 // ------------------------------------------
+// STEAL
+// ------------------------------------------
+
+export function declareSteal(
+  game: GameState,
+  actorId: string,
+  targetId: string
+): GameState {
+  validateTurnAction(game, actorId);
+
+  if (actorId === targetId) {
+    throw new Error(
+      "You cannot steal from yourself."
+    );
+  }
+
+  const target = game.players.find(
+    (player) => player.id === targetId
+  );
+
+  if (!target) {
+    throw new Error(
+      "Target player not found."
+    );
+  }
+
+  if (target.hand.length === 0) {
+    throw new Error(
+      "You cannot steal from an eliminated player."
+    );
+  }
+
+  return {
+    ...game,
+
+    phase: "claim_response",
+
+    pendingAction: {
+      type: "claim",
+      action: "steal",
+      actorId,
+      targetId,
+      claimedRole: "Captain",
+      passedPlayerIds: [],
+      challenge: null,
+    },
+  };
+}
+
+
+// ------------------------------------------
 // ASSASSINATION
 // ------------------------------------------
 // Pay 3 coins and claim Assassin.
