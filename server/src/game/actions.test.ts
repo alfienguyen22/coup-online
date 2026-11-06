@@ -9,6 +9,7 @@ import {
   resolveCoupInfluenceLoss,
   declareAssassination,
   declareSteal,
+  declareExchange,
 } from "./actions.js";
 import { finishTurn } from "./turns.js";
 
@@ -633,5 +634,82 @@ describe("Steal", () => {
 
     expect(game.players[0].coins).toBe(2);
     expect(game.players[1].coins).toBe(4);
+  });
+});
+
+describe("Exchange", () => {
+  it("starts an Ambassador claim", () => {
+    const game = testGame();
+
+    const originalDeck = [...game.deck];
+    const originalHand = [...game.players[0].hand];
+
+    const updated = declareExchange(
+      game,
+      "1"
+    );
+
+    expect(updated.phase).toBe(
+      "claim_response"
+    );
+
+    expect(updated.pendingAction).toEqual({
+      type: "claim",
+      action: "exchange",
+      actorId: "1",
+      claimedRole: "Ambassador",
+      passedPlayerIds: [],
+      challenge: null,
+    });
+
+    // Cards are NOT drawn until the
+    // Ambassador claim succeeds.
+    expect(updated.deck).toEqual(
+      originalDeck
+    );
+
+    expect(updated.players[0].hand).toEqual(
+      originalHand
+    );
+  });
+
+  it("prevents exchanging outside the player's turn", () => {
+    const game = testGame();
+
+    expect(() =>
+      declareExchange(game, "2")
+    ).toThrow();
+  });
+
+  it("requires Coup instead at 10 or more coins", () => {
+    const game = testGame();
+
+    game.players[0].coins = 10;
+
+    expect(() =>
+      declareExchange(game, "1")
+    ).toThrow();
+  });
+
+  it("prevents Exchange while another action is pending", () => {
+    let game = testGame();
+
+    game = declareForeignAid(
+      game,
+      "1"
+    );
+
+    expect(() =>
+      declareExchange(game, "1")
+    ).toThrow();
+  });
+
+  it("does not mutate the original game", () => {
+    const game = testGame();
+
+    declareExchange(game, "1");
+
+    expect(game.phase).toBe("turn_start");
+    expect(game.pendingAction).toBeNull();
   });
 });

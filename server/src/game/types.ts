@@ -1,4 +1,3 @@
-
 export const ROLES = [
   "Duke",
   "Assassin",
@@ -38,6 +37,7 @@ export type GamePhase =
   | "assassination_block_challenge"
   | "assassination_influence_loss"
   | "assassination_block_influence_loss"
+  | "exchange_selection"
   | "game_over";
 
 
@@ -76,8 +76,13 @@ export interface ChallengeResult {
 export interface PendingClaim {
   type: "claim";
 
-  // Tax, assassinate and stealing is implemented now.
-  action: "tax" | "assassinate" | "steal";
+  // Character actions implemented so far.
+  action: 
+  | "tax" 
+  | "assassinate" 
+  | "steal"
+  | "exchange";
+  
 
   actorId: string;
   targetId?: string;
@@ -90,7 +95,10 @@ export interface PendingClaim {
   blockClaimedRole?: Role;
   blockPassedPlayerIds?: string[];
   blockChallenge?: ChallengeResult | null;
+
+  exchangeDrawnCards?: Role[];
 }
+
 
 export type PendingAction =
   | PendingForeignAid

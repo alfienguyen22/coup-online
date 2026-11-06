@@ -7,11 +7,18 @@ import {
   declareAssassination,
   takeIncome,
   declareForeignAid,
+  declareExchange,
 } from "./actions.js";
+
+import type {
+  GameState,
+  Role,
+} from "./types.js";
 
 import {
   respondToClaim,
   resolveClaimInfluenceLoss,
+  resolveExchangeSelection,
 } from "./challenges.js";
 
 function testGame() {
@@ -449,5 +456,358 @@ describe("Assassination claims", () => {
       actorId: "1",
       targetId: "2",
     });
+  });
+});
+
+describe("Exchange claims", () => {
+  it("draws 2 cards when everyone accepts the Ambassador claim", () => {
+    const game = testGame();
+
+    const originalDeckSize =
+      game.deck.length;
+
+    const originalHand = [
+      ...game.players[0].hand,
+    ];
+
+    let updated = declareExchange(
+      game,
+      "1"
+    );
+
+    updated = respondToClaim(
+      updated,
+      "2",
+      "pass"
+    );
+
+    updated = respondToClaim(
+      updated,
+      "3",
+      "pass"
+    );
+
+    expect(updated.phase).toBe(
+      "exchange_selection"
+    );
+
+    expect(
+      updated.pendingAction
+    ).toMatchObject({
+      type: "claim",
+      action: "exchange",
+      actorId: "1",
+      claimedRole: "Ambassador",
+    });
+
+    expect(
+      updated.pendingAction?.type === "claim"
+        ? updated.pendingAction.exchangeDrawnCards
+        : undefined
+    ).toHaveLength(2);
+
+    // Two cards have been drawn.
+    expect(updated.deck).toHaveLength(
+      originalDeckSize - 2
+    );
+
+    // The player's existing hand has not
+    // changed yet.
+    expect(updated.players[0].hand).toEqual(
+      originalHand
+    );
+  });
+  it("allows the player to choose cards to keep after Exchange", () => {
+    const game = testGame();
+
+    const originalDeckSize = game.deck.length;
+    const originalHand = [...game.players[0].hand];
+
+    let updated = declareExchange(game, "1");
+
+    updated = respondToClaim(
+      updated,
+      "2",
+      "pass"
+    );
+
+    updated = respondToClaim(
+      updated,
+      "3",
+      "pass"
+    );
+
+    expect(updated.phase).toBe(
+      "exchange_selection"
+    );
+
+    if (
+      updated.pendingAction?.type !== "claim" ||
+      !updated.pendingAction.exchangeDrawnCards
+    ) {
+      throw new Error(
+        "Expected drawn Exchange cards."
+      );
+    }
+
+    const drawnCards =
+      updated.pendingAction.exchangeDrawnCards;
+
+    // Keep one original card and one newly drawn card.
+    const cardsToKeep = [
+      originalHand[0],
+      drawnCards[0],
+    ];
+
+    updated = resolveExchangeSelection(
+      updated,
+      "1",
+      cardsToKeep
+    );
+
+    expect(updated.players[0].hand).toEqual(
+      cardsToKeep
+    );
+
+    // Two cards were returned, so the deck
+    // returns to its original size.
+    expect(updated.deck).toHaveLength(
+      originalDeckSize
+    );
+
+    expect(updated.phase).toBe("turn_start");
+    expect(updated.currentPlayerIndex).toBe(1);
+    expect(updated.pendingAction).toBeNull();
+  });
+
+
+  it("only keeps one card when the player has one influence remaining", () => {
+    const initial = testGame();
+
+    initial.players[0].hand = ["Duke"];
+
+    let game = declareExchange(
+      initial,
+      "1"
+    );
+
+    game = respondToClaim(
+      game,
+      "2",
+      "pass"
+    );
+
+    game = respondToClaim(
+      game,
+      "3",
+      "pass"
+    );
+
+    if (
+      game.pendingAction?.type !== "claim" ||
+      !game.pendingAction.exchangeDrawnCards
+    ) {
+      throw new Error(
+        "Expected drawn Exchange cards."
+      );
+    }
+
+    const drawnCards =
+      game.pendingAction.exchangeDrawnCards;
+
+    const deckSizeBeforeSelection =
+      game.deck.length;
+
+    game = resolveExchangeSelection(
+      game,
+      "1",
+      [drawnCards[0]]
+    );
+
+    expect(game.players[0].hand).toEqual([
+      drawnCards[0],
+    ]);
+
+    // With one influence:
+    // 1 old card + 2 drawn - 1 kept = 2 returned.
+    expect(game.deck).toHaveLength(
+      deckSizeBeforeSelection + 2
+    );
+
+    expect(game.phase).toBe("turn_start");
+  });
+
+
+  it("rejects keeping the wrong number of cards", () => {
+    let game = declareExchange(
+      testGame(),
+      "1"
+    );
+
+    game = respondToClaim(
+      game,
+      "2",
+      "pass"
+    );
+
+    game = respondToClaim(
+      game,
+      "3",
+      "pass"
+    );
+
+    expect(() =>
+      resolveExchangeSelection(
+        game,
+        "1",
+        []
+      )
+    ).toThrow();
+  });
+
+
+  it("rejects cards that are not available in the Exchange", () => {
+    let game = declareExchange(
+      testGame(),
+      "1"
+    );
+
+    game = respondToClaim(
+      game,
+      "2",
+      "pass"
+    );
+
+    game = respondToClaim(
+      game,
+      "3",
+      "pass"
+    );
+
+    const actor = game.players[0];
+
+    // Find a role with more requested copies than
+    // actually exist in the available Exchange cards.
+    const impossibleSelection: Role[] = [
+      "Contessa",
+      "Contessa",
+    ];
+
+    const availableCards = [
+      ...actor.hand,
+      ...(
+        game.pendingAction?.type === "claim"
+          ? game.pendingAction.exchangeDrawnCards ?? []
+          : []
+      ),
+    ];
+
+    const contessaCount = availableCards.filter(
+      (card) => card === "Contessa"
+    ).length;
+
+    // Only test this particular impossible selection
+    // if fewer than 2 Contessas are available.
+    if (contessaCount < 2) {
+      expect(() =>
+        resolveExchangeSelection(
+          game,
+          "1",
+          impossibleSelection
+        )
+      ).toThrow();
+    }
+  });
+
+
+  it("only allows the acting player to choose Exchange cards", () => {
+    let game = declareExchange(
+      testGame(),
+      "1"
+    );
+
+    game = respondToClaim(
+      game,
+      "2",
+      "pass"
+    );
+
+    game = respondToClaim(
+      game,
+      "3",
+      "pass"
+    );
+
+    const playerTwoHand = [
+      ...game.players[1].hand,
+    ];
+
+    expect(() =>
+      resolveExchangeSelection(
+        game,
+        "2",
+        playerTwoHand
+      )
+    ).toThrow();
+  });
+
+
+  it("does not mutate the Exchange state", () => {
+    let game = declareExchange(
+      testGame(),
+      "1"
+    );
+
+    game = respondToClaim(
+      game,
+      "2",
+      "pass"
+    );
+
+    game = respondToClaim(
+      game,
+      "3",
+      "pass"
+    );
+
+    if (
+      game.pendingAction?.type !== "claim" ||
+      !game.pendingAction.exchangeDrawnCards
+    ) {
+      throw new Error(
+        "Expected drawn Exchange cards."
+      );
+    }
+
+    const originalHand = [
+      ...game.players[0].hand,
+    ];
+
+    const originalDeck = [
+      ...game.deck,
+    ];
+
+    const cardsToKeep = [
+      originalHand[0],
+      game.pendingAction.exchangeDrawnCards[0],
+    ];
+
+    const updated = resolveExchangeSelection(
+      game,
+      "1",
+      cardsToKeep
+    );
+
+    expect(game.players[0].hand).toEqual(
+      originalHand
+    );
+
+    expect(game.deck).toEqual(originalDeck);
+
+    expect(game.phase).toBe(
+      "exchange_selection"
+    );
+
+    expect(updated.phase).toBe("turn_start");
   });
 });

@@ -54,6 +54,39 @@ function resolveClaimEffect(
           challenge: null,
         },
       };
+
+    case "exchange": {
+      const nextDeck = [...game.deck];
+
+      const firstCard = nextDeck.pop();
+      const secondCard = nextDeck.pop();
+
+      if (!firstCard || !secondCard) {
+        throw new Error(
+          "Not enough cards in the Court deck to exchange."
+        );
+      }
+
+      return {
+        ...game,
+
+        deck: nextDeck,
+
+        phase: "exchange_selection",
+
+        pendingAction: {
+          ...claim,
+
+          passedPlayerIds: [],
+          challenge: null,
+
+          exchangeDrawnCards: [
+            firstCard,
+            secondCard,
+          ],
+        },
+      };
+    }
   }
 }
 
@@ -280,4 +313,117 @@ export function resolveClaimInfluenceLoss(
   // The claimant loses influence,
   // and the original action is cancelled.
   return finishTurn(afterLoss);
+}
+
+// ------------------------------------------
+// RESOLVE EXCHANGE SELECTION
+// ------------------------------------------
+
+export function resolveExchangeSelection(
+  game: GameState,
+  playerId: string,
+  cardsToKeep: Role[]
+): GameState {
+  if (
+    game.phase !== "exchange_selection" ||
+    game.pendingAction?.type !== "claim" ||
+    game.pendingAction.action !== "exchange"
+  ) {
+    throw new Error(
+      "No Exchange selection is pending."
+    );
+  }
+
+  const claim = game.pendingAction;
+
+  if (playerId !== claim.actorId) {
+    throw new Error(
+      "Only the player performing the Exchange can choose cards."
+    );
+  }
+
+  const actor = game.players.find(
+    (player) => player.id === playerId
+  );
+
+  if (!actor || actor.hand.length === 0) {
+    throw new Error(
+      "The exchanging player is not active."
+    );
+  }
+
+  const drawnCards =
+    claim.exchangeDrawnCards;
+
+  if (!drawnCards || drawnCards.length !== 2) {
+    throw new Error(
+      "Exchange cards are missing."
+    );
+  }
+
+  // A player keeps the same number of
+  // unrevealed influences they had before.
+  const numberToKeep = actor.hand.length;
+
+  if (cardsToKeep.length !== numberToKeep) {
+    throw new Error(
+      `You must keep exactly ${numberToKeep} card(s).`
+    );
+  }
+
+  // These are all cards the player may choose from:
+  // their existing hand + the two cards just drawn.
+  const availableCards: Role[] = [
+    ...actor.hand,
+    ...drawnCards,
+  ];
+
+  // Copy the array so we can remove selected cards
+  // one at a time. This correctly handles duplicates.
+  const cardsToReturn: Role[] = [
+    ...availableCards,
+  ];
+
+  for (const card of cardsToKeep) {
+    const index = cardsToReturn.indexOf(card);
+
+    if (index === -1) {
+      throw new Error(
+        "Selected card is not available in this Exchange."
+      );
+    }
+
+    cardsToReturn.splice(index, 1);
+  }
+
+  // Because the player drew exactly two cards,
+  // exactly two cards should always go back.
+  if (cardsToReturn.length !== 2) {
+    throw new Error(
+      "Exchange must return exactly two cards."
+    );
+  }
+
+  const updatedPlayers = game.players.map(
+    (player) =>
+      player.id === playerId
+        ? {
+            ...player,
+            hand: [...cardsToKeep],
+          }
+        : player
+  );
+
+  // Return the unused cards to the Court deck
+  // and shuffle them back in.
+  const updatedDeck = shuffleDeck([
+    ...game.deck,
+    ...cardsToReturn,
+  ]);
+
+  return finishTurn({
+    ...game,
+    players: updatedPlayers,
+    deck: updatedDeck,
+  });
 }

@@ -423,3 +423,29 @@ export function declareTax(
   };
 }
 
+
+// ------------------------------------------
+// EXCHANGE
+// ------------------------------------------
+
+export function declareExchange(
+  game: GameState,
+  actorId: string
+): GameState {
+  validateTurnAction(game, actorId);
+
+  return {
+    ...game,
+
+    phase: "claim_response",
+
+    pendingAction: {
+      type: "claim",
+      action: "exchange",
+      actorId,
+      claimedRole: "Ambassador",
+      passedPlayerIds: [],
+      challenge: null,
+    },
+  };
+}
